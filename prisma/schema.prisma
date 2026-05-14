@@ -1,0 +1,274 @@
+// E-Inventory System MBG — Prisma schema
+// PostgreSQL — production-ready relational model + FIFO batches
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleSlug {
+  SUPER_ADMIN
+  KOORDINATOR_SPPG
+  PETUGAS_GUDANG
+  PETUGAS_GIZI
+  STOK_AUDITOR
+}
+
+enum TransactionType {
+  INBOUND
+  USAGE
+  RETURN
+  WASTE
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  APPROVED
+  REJECTED
+}
+
+enum DataVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum VerificationAction {
+  APPROVE
+  REJECT
+}
+
+enum NotificationType {
+  LOW_STOCK
+  EXPIRY_WARNING
+  SUSPICIOUS_LOGIN
+  SYNC_FAILED
+  BACKUP_SUCCESS
+  SYSTEM
+}
+
+enum ReportType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  STOCK
+  HPP
+  WASTE
+  AUDIT
+}
+
+model User {
+  id                   String    @id @default(cuid())
+  email                String    @unique
+  username             String    @unique
+  passwordHash         String
+  name                 String
+  roleId               String
+  role                 Role      @relation(fields: [roleId], references: [id])
+  isActive             Boolean   @default(true)
+  failedLoginAttempts  Int       @default(0)
+  lockedUntil          DateTime?
+  lastLoginAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  transactionsCreated InventoryTransaction[] @relation("TransactionCreator")
+  transactionsVerified InventoryTransaction[] @relation("TransactionVerifier")
+  wasteLogs           WasteLog[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  verificationLogs    VerificationLog[]
+  reports             Report[]
+  backupJobs          BackupJob[]
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String
+  slug        RoleSlug         @unique
+  description String?
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  name        String
+  action      String
+  resource    String
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId         String
+  permissionId   String
+  role           Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission     Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model InventoryItem {
+  id          String   @id @default(cuid())
+  name        String
+  sku         String   @unique
+  category    String
+  unit        String
+  minStock    Decimal  @db.Decimal(18, 4)
+  maxStock    Decimal? @db.Decimal(18, 4)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  batches       InventoryBatch[]
+  transactions  InventoryTransaction[]
+  wasteLogs     WasteLog[]
+}
+
+model InventoryBatch {
+  id                String   @id @default(cuid())
+  itemId            String
+  item              InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  batchNo           String
+  quantity          Decimal  @db.Decimal(18, 4)
+  remainingQuantity Decimal  @db.Decimal(18, 4)
+  unitCost          Decimal  @db.Decimal(18, 4)
+  receivedAt        DateTime
+  invoiceUrl        String?
+  createdAt         DateTime @default(now())
+
+  lines TransactionBatchLine[]
+
+  @@index([itemId, receivedAt])
+}
+
+model InventoryTransaction {
+  id              String              @id @default(cuid())
+  type            TransactionType
+  status          TransactionStatus   @default(DRAFT)
+  visibility      DataVisibility      @default(PRIVATE)
+  itemId          String
+  item            InventoryItem       @relation(fields: [itemId], references: [id])
+  quantity        Decimal             @db.Decimal(18, 4)
+  supplier        String?
+  unitPrice       Decimal?            @db.Decimal(18, 4)
+  notes           String?
+  invoiceUrl      String?
+  performedAt     DateTime
+  createdById     String
+  createdBy       User                @relation("TransactionCreator", fields: [createdById], references: [id])
+  verifiedById    String?
+  verifiedBy      User?               @relation("TransactionVerifier", fields: [verifiedById], references: [id])
+  verificationNote String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  batchLines      TransactionBatchLine[]
+  verificationLogs VerificationLog[]
+  wasteLogs       WasteLog[]
+
+  @@index([type, status])
+  @@index([itemId])
+  @@index([performedAt])
+}
+
+model TransactionBatchLine {
+  id            String                 @id @default(cuid())
+  transactionId String
+  transaction   InventoryTransaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  batchId       String
+  batch         InventoryBatch         @relation(fields: [batchId], references: [id])
+  quantity      Decimal                @db.Decimal(18, 4)
+  unitCost      Decimal                @db.Decimal(18, 4)
+
+  @@index([batchId])
+}
+
+model WasteLog {
+  id            String   @id @default(cuid())
+  itemId        String
+  item          InventoryItem @relation(fields: [itemId], references: [id])
+  transactionId String?
+  transaction   InventoryTransaction? @relation(fields: [transactionId], references: [id])
+  quantity      Decimal  @db.Decimal(18, 4)
+  reason        String
+  lossValue     Decimal  @db.Decimal(18, 4)
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model Report {
+  id           String     @id @default(cuid())
+  type         ReportType
+  periodStart  DateTime
+  periodEnd    DateTime
+  payload      Json
+  generatedById String
+  generatedBy  User      @relation(fields: [generatedById], references: [id])
+  createdAt    DateTime   @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  role      String?
+  action    String
+  entity    String
+  entityId  String?
+  ip        String?
+  userAgent String?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+}
+
+model VerificationLog {
+  id            String               @id @default(cuid())
+  transactionId String
+  transaction   InventoryTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User                 @relation(fields: [userId], references: [id])
+  action        VerificationAction
+  note          String?
+  createdAt     DateTime             @default(now())
+}
+
+model BackupJob {
+  id          String   @id @default(cuid())
+  filename    String
+  sizeBytes   Int
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
