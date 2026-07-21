@@ -10,12 +10,12 @@ type MbgLogoProps = {
 export function MbgLogo({ className, size = 40, priority }: MbgLogoProps) {
   return (
     <Image
-      src="/logo-mbg.svg"
-      alt="Logo Program Makan Bergizi Gratis"
+      src="/logo-mbg.jpg"
+      alt="Logo Badan Gizi Nasional"
       width={size}
       height={size}
       priority={priority}
-      className={cn("h-auto w-auto shrink-0", className)}
+      className={cn("h-auto w-auto shrink-0 rounded-full", className)}
       sizes={`${size}px`}
     />
   );

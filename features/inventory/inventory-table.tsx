@@ -26,6 +26,7 @@ import {
 import { formatDecimal } from "@/lib/utils";
 import { freshnessFromReceivedAt, freshnessLabel } from "@/services/freshness";
 import type { RoleSlug } from "@prisma/client";
+import { useState } from "react";
 
 type Row = {
   id: string;
@@ -50,6 +51,32 @@ export function InventoryTable({ role }: { role: RoleSlug }) {
   const [rows, setRows] = React.useState<Row[]>([]);
   const [q, setQ] = React.useState("");
   const [sorting, setSorting] = React.useState<SortingState>([]);
+ 
+  const [name, setName] = useState(""); 
+  const [sku, setSku] = useState(""); 
+  const [category, setCategory] = useState(""); 
+  const [unit, setUnit] = useState(""); 
+  const [minStock, setMinStock] = useState(""); 
+  const [maxStock, setMaxStock] = useState("");
+
+  const handleSubmit = async () => { 
+    await fetch("/api/inventory/items", {
+      method: "POST", 
+      headers: { 
+        "Content-Type": "application/json", 
+      }, 
+      
+      body: JSON.stringify({ 
+        name, 
+        sku, 
+        category, 
+        unit, 
+        minStock, 
+        maxStock, }), 
+      }); 
+      alert("Bahan berhasil ditambahkan"); 
+      location.reload(); 
+    };
 
   React.useEffect(() => {
     (async () => {
@@ -102,14 +129,18 @@ export function InventoryTable({ role }: { role: RoleSlug }) {
         },
       },
       {
-        accessorKey: "avgUnitCost",
-        header: "Harga rata-rata",
-        cell: ({ row }) => formatDecimal(row.original.avgUnitCost, 0),
-      },
-    ],
-    [],
-  );
-
+        accessorKey: "avgUnitCost", 
+        header: "HPP Rata-rata", 
+        cell: ({ row }) => 
+          new Intl.NumberFormat("id-ID", { 
+            style: "currency", 
+            currency: "IDR", 
+            minimumFractionDigits: 0, 
+          }).format(row.original.avgUnitCost),
+        }, 
+      ], 
+      [], 
+    );
   const table = useReactTable({
     data: filtered,
     columns,
@@ -139,6 +170,42 @@ export function InventoryTable({ role }: { role: RoleSlug }) {
         />
       </CardHeader>
       <CardContent className="space-y-4">
+      <div className="grid gap-2 md:grid-cols-2"> 
+      <Input 
+      placeholder="Nama bahan" 
+      value={name} 
+      onChange={(e) => setName(e.target.value)} 
+      /> 
+      
+      <Input placeholder="SKU" 
+      value={sku} 
+      onChange={(e) => setSku(e.target.value)} 
+      /> 
+      
+      <Input placeholder="Kategori" 
+      value={category} 
+      onChange={(e) => setCategory(e.target.value)} 
+      /> 
+      
+      <Input placeholder="Satuan" 
+      value={unit} 
+      onChange={(e) => setUnit(e.target.value)} 
+      /> 
+      
+      <Input placeholder="Minimum stok" 
+      value={minStock} 
+      onChange={(e) => setMinStock(e.target.value)} 
+      /> 
+      
+      <Input placeholder="Maximum stok" 
+      value={maxStock} 
+      onChange={(e) => setMaxStock(e.target.value)} 
+      /> 
+      </div> 
+      <Button onClick={handleSubmit}> 
+      Tambah Bahan 
+      </Button>
+
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
