@@ -113,7 +113,7 @@ export async function POST(req: Request) {
       success: true, 
       item, 
     }); 
-  } catch (error) { 
+  } catch { 
     return NextResponse.json( 
       { 
         error: "Gagal menambahkan bahan", 
