@@ -59,8 +59,7 @@ export function LoginForm() {
   }, [form]);
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const devSkipTurnstile =
-    process.env.NODE_ENV === "development" && !siteKey;
+  const devSkipTurnstile = !siteKey;
 
   async function onSubmit(values: FormValues) {
     setError(null);
