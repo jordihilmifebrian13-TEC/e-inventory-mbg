@@ -59,7 +59,8 @@ export function LoginForm() {
   }, [form]);
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const devSkipTurnstile = !siteKey;
+  const devSkipTurnstile = 
+    process.env.DEV_BYPASS_TURNSTILE === "true" || !siteKey;
 
   async function onSubmit(values: FormValues) {
     setError(null);
